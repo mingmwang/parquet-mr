@@ -289,13 +289,13 @@ public class TestParquetMetadataConverter {
   public void randomTestFilterMetaData() {
     // randomized property based testing
     // if it fails add the case above
-    Random random = new Random(System.currentTimeMillis());
+    Random random = new Random(42);
     for (int j = 0; j < 100; j++) {
       long[] rgs = new long[random.nextInt(50)];
       for (int i = 0; i < rgs.length; i++) {
         rgs[i] = random.nextInt(10000) + 1; // No empty row groups
       }
-      int splitSize = random.nextInt(10000);
+      int splitSize = random.nextInt(10000) + 1; // 0 would lead to an infinite loop
       try {
         verifyAllFilters(metadata(rgs), splitSize);
       } catch (AssertionError e) {
@@ -658,6 +658,7 @@ public class TestParquetMetadataConverter {
         binaryType);
 
     Assert.assertFalse("Stats should not be empty", convertedStats.isEmpty());
+    Assert.assertTrue(convertedStats.isNumNullsSet());
     Assert.assertEquals("Should have 3 nulls", 3, convertedStats.getNumNulls());
     if (helper == StatsHelper.V1) {
       assertFalse("Min-max should be null for V1 stats", convertedStats.hasNonNullValue());
@@ -667,6 +668,38 @@ public class TestParquetMetadataConverter {
       Assert.assertEquals("Should have correct max (unsigned sort)",
           Binary.fromString("z"), convertedStats.genericGetMax());
     }
+  }
+
+  @Test
+  public void testMissingValuesFromStats() {
+    ParquetMetadataConverter converter = new ParquetMetadataConverter();
+    PrimitiveType type = Types.required(PrimitiveTypeName.INT32).named("test_int32");
+
+    org.apache.parquet.format.Statistics formatStats = new org.apache.parquet.format.Statistics();
+    Statistics<?> stats = converter.fromParquetStatistics(Version.FULL_VERSION, formatStats, type);
+    assertFalse(stats.isNumNullsSet());
+    assertFalse(stats.hasNonNullValue());
+    assertTrue(stats.isEmpty());
+    assertEquals(-1, stats.getNumNulls());
+
+    formatStats.clear();
+    formatStats.setMin(BytesUtils.intToBytes(-100));
+    formatStats.setMax(BytesUtils.intToBytes(100));
+    stats = converter.fromParquetStatistics(Version.FULL_VERSION, formatStats, type);
+    assertFalse(stats.isNumNullsSet());
+    assertTrue(stats.hasNonNullValue());
+    assertFalse(stats.isEmpty());
+    assertEquals(-1, stats.getNumNulls());
+    assertEquals(-100, stats.genericGetMin());
+    assertEquals(100, stats.genericGetMax());
+
+    formatStats.clear();
+    formatStats.setNull_count(2000);
+    stats = converter.fromParquetStatistics(Version.FULL_VERSION, formatStats, type);
+    assertTrue(stats.isNumNullsSet());
+    assertFalse(stats.hasNonNullValue());
+    assertFalse(stats.isEmpty());
+    assertEquals(2000, stats.getNumNulls());
   }
 
   @Test

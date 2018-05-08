@@ -81,6 +81,7 @@ public class CodecFactory implements CompressionCodecFactory {
    *                 always records the uncompressed size of a buffer. If this
    *                 CodecFactory is only going to be used for decompressors, this
    *                 parameter will not impact the function of the factory.
+   * @return a configured direct codec factory
    */
   public static CodecFactory createDirectCodecFactory(Configuration config, ByteBufferAllocator allocator, int pageSize) {
     return new DirectCodecFactory(config, allocator, pageSize);
@@ -115,7 +116,7 @@ public class CodecFactory implements CompressionCodecFactory {
 
     @Override
     public void decompress(ByteBuffer input, int compressedSize, ByteBuffer output, int uncompressedSize) throws IOException {
-      ByteBuffer decompressed = decompress(BytesInput.from(input, 0, input.remaining()), uncompressedSize).toByteBuffer();
+      ByteBuffer decompressed = decompress(BytesInput.from(input), uncompressedSize).toByteBuffer();
       output.put(decompressed);
     }
 
@@ -128,9 +129,6 @@ public class CodecFactory implements CompressionCodecFactory {
 
   /**
    * Encapsulates the logic around hadoop compression
-   *
-   * @author Julien Le Dem
-   *
    */
   class HeapBytesCompressor extends BytesCompressor {
 
