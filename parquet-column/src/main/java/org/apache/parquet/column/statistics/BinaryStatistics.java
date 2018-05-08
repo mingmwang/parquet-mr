@@ -94,9 +94,8 @@ public class BinaryStatistics extends Statistics<Binary> {
   }
 
   @Override
-  String toString(Binary value) {
-    // TODO: have separate toString for different logical types?
-    return value == null ? "null" : value.toStringUsingUTF8();
+  String stringify(Binary value) {
+    return stringifier.stringify(value);
   }
 
   @Override
@@ -105,6 +104,8 @@ public class BinaryStatistics extends Statistics<Binary> {
   }
 
   /**
+   * @param min_value a min binary
+   * @param max_value a max binary
    * @deprecated use {@link #updateStats(Binary)}, will be removed in 2.0.0
    */
   @Deprecated
@@ -114,6 +115,8 @@ public class BinaryStatistics extends Statistics<Binary> {
   }
 
   /**
+   * @param min_value a min binary
+   * @param max_value a max binary
    * @deprecated use {@link #updateStats(Binary)}, will be removed in 2.0.0
    */
   @Deprecated
@@ -134,6 +137,7 @@ public class BinaryStatistics extends Statistics<Binary> {
   }
 
   /**
+   * @return the max binary
    * @deprecated use {@link #genericGetMax()}, will be removed in 2.0.0
    */
   @Deprecated
@@ -142,6 +146,7 @@ public class BinaryStatistics extends Statistics<Binary> {
   }
 
   /**
+   * @return the min binary
    * @deprecated use {@link #genericGetMin()}, will be removed in 2.0.0
    */
   @Deprecated
@@ -150,6 +155,8 @@ public class BinaryStatistics extends Statistics<Binary> {
   }
 
   /**
+   * @param min a min binary
+   * @param max a max binary
    * @deprecated use {@link #updateStats(Binary)}, will be removed in 2.0.0
    */
   @Deprecated

@@ -33,17 +33,13 @@ import org.codehaus.jackson.map.SerializationConfig.Feature;
 /**
  * Meta Data block stored in the footer of the file
  * contains file level (Codec, Schema, ...) and block level (location, columns, record count, ...) meta data
- *
- * @author Julien Le Dem
- *
  */
 public class ParquetMetadata {
 
   private static final ObjectMapper objectMapper = new ObjectMapper();
 
   /**
-   *
-   * @param parquetMetaData
+   * @param parquetMetaData an instance of parquet metadata to convert
    * @return the json representation
    */
   public static String toJSON(ParquetMetadata parquetMetaData) {
@@ -52,7 +48,7 @@ public class ParquetMetadata {
 
   /**
    *
-   * @param parquetMetaData
+   * @param parquetMetaData an instance of parquet metadata to convert
    * @return the pretty printed json representation
    */
   public static String toPrettyJSON(ParquetMetadata parquetMetaData) {

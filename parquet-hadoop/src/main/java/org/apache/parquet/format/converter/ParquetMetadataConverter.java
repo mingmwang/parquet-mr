@@ -96,6 +96,7 @@ public class ParquetMetadataConverter {
   }
 
   /**
+   * @param conf a configuration
    * @deprecated will be removed in 2.0.0; use {@code ParquetMetadataConverter(ParquetReadOptions)}
    */
   @Deprecated
@@ -379,8 +380,10 @@ public class ParquetMetadataConverter {
   }
 
   /**
-   * @deprecated Replaced by {@link #fromParquetStatistics(
-   * String createdBy, Statistics statistics, PrimitiveTypeName type)}
+   * @param statistics parquet format statistics
+   * @param type a primitive type name
+   * @return the statistics
+   * @deprecated will be removed in 2.0.0.
    */
   @Deprecated
   public static org.apache.parquet.column.statistics.Statistics fromParquetStatistics(Statistics statistics, PrimitiveTypeName type) {
@@ -388,7 +391,11 @@ public class ParquetMetadataConverter {
   }
 
   /**
-   * @deprecated Use {@link #fromParquetStatistics(String, Statistics, PrimitiveType)} instead.
+   * @param createdBy the created-by string from the file
+   * @param statistics parquet format statistics
+   * @param type a primitive type name
+   * @return the statistics
+   * @deprecated will be removed in 2.0.0.
    */
   @Deprecated
   public static org.apache.parquet.column.statistics.Statistics fromParquetStatistics
@@ -401,7 +408,8 @@ public class ParquetMetadataConverter {
   static org.apache.parquet.column.statistics.Statistics fromParquetStatisticsInternal
       (String createdBy, Statistics formatStats, PrimitiveType type, SortOrder typeSortOrder) {
     // create stats object based on the column type
-    org.apache.parquet.column.statistics.Statistics stats = org.apache.parquet.column.statistics.Statistics.createStats(type);
+    org.apache.parquet.column.statistics.Statistics.Builder statsBuilder =
+        org.apache.parquet.column.statistics.Statistics.getBuilderForReading(type);
 
     if (formatStats != null) {
       // Use the new V2 min-max statistics over the former one if it is filled
@@ -409,9 +417,12 @@ public class ParquetMetadataConverter {
         byte[] min = formatStats.min_value.array();
         byte[] max = formatStats.max_value.array();
         if (isMinMaxStatsSupported(type) || Arrays.equals(min, max)) {
-          stats.setMinMaxFromBytes(min, max);
+          statsBuilder.withMin(min);
+          statsBuilder.withMax(max);
         }
-        stats.setNumNulls(formatStats.null_count);
+        if (formatStats.isSetNull_count()) {
+          statsBuilder.withNumNulls(formatStats.null_count);
+        }
       } else {
         boolean isSet = formatStats.isSetMax() && formatStats.isSetMin();
         boolean maxEqualsMin = isSet ? Arrays.equals(formatStats.getMin(), formatStats.getMax()) : false;
@@ -424,13 +435,16 @@ public class ParquetMetadataConverter {
         if (!CorruptStatistics.shouldIgnoreStatistics(createdBy, type.getPrimitiveTypeName()) &&
             (sortOrdersMatch || maxEqualsMin)) {
           if (isSet) {
-            stats.setMinMaxFromBytes(formatStats.min.array(), formatStats.max.array());
+            statsBuilder.withMin(formatStats.min.array());
+            statsBuilder.withMax(formatStats.max.array());
           }
-          stats.setNumNulls(formatStats.null_count);
+          if (formatStats.isSetNull_count()) {
+            statsBuilder.withNumNulls(formatStats.null_count);
+          }
         }
       }
     }
-    return stats;
+    return statsBuilder.build();
   }
 
   public org.apache.parquet.column.statistics.Statistics fromParquetStatistics(
@@ -495,7 +509,6 @@ public class ParquetMetadataConverter {
         return SortOrder.SIGNED;
       case BINARY:
       case FIXED_LEN_BYTE_ARRAY:
-      case INT96: // only used for timestamp, which uses unsigned values
         return SortOrder.UNSIGNED;
     }
     return SortOrder.UNKNOWN;
@@ -710,9 +723,9 @@ public class ParquetMetadataConverter {
 
   /**
    * [ startOffset, endOffset )
-   * @param startOffset
-   * @param endOffset
-   * @return the filter
+   * @param startOffset a start offset (inclusive)
+   * @param endOffset an end offset (exclusive)
+   * @return a range filter from the offsets
    */
   public static MetadataFilter range(long startOffset, long endOffset) {
     return new RangeMetadataFilter(startOffset, endOffset);
@@ -751,7 +764,6 @@ public class ParquetMetadataConverter {
 
   /**
    * [ startOffset, endOffset )
-   * @author Julien Le Dem
    */
   // Visible for testing
   static final class RangeMetadataFilter extends MetadataFilter {

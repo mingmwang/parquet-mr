@@ -20,7 +20,6 @@ package org.apache.parquet.schema;
 
 import static org.apache.parquet.Preconditions.checkNotNull;
 
-import java.io.Serializable;
 import java.util.List;
 
 import org.apache.parquet.io.InvalidRecordException;
@@ -35,9 +34,6 @@ abstract public class Type {
 
   /**
    * represents a field ID
-   *
-   * @author Julien Le Dem
-   *
    */
   public static final class ID {
     private final int id;
@@ -48,6 +44,7 @@ abstract public class Type {
 
     /**
      * For bean serialization, used by Cascading 3.
+     * @return this type's id
      * @deprecated use {@link #intValue()} instead.
      */
     @Deprecated
@@ -77,8 +74,6 @@ abstract public class Type {
 
   /**
    * Constraint on the repetition of a field
-   *
-   * @author Julien Le Dem
    */
   public static enum Repetition {
     /**
@@ -111,7 +106,7 @@ abstract public class Type {
     ;
 
     /**
-     * @param other
+     * @param other a repetition to test
      * @return true if it is strictly more restrictive than other
      */
     abstract public boolean isMoreRestrictiveThan(Repetition other);
@@ -157,7 +152,7 @@ abstract public class Type {
   }
 
   /**
-   * @param id
+   * @param id an integer id
    * @return the same type with the id field set
    */
   public abstract Type withId(int id);
@@ -170,7 +165,7 @@ abstract public class Type {
   }
 
   /**
-   * @param rep
+   * @param rep repetition level to test
    * @return if repetition of the type is rep
    */
   public boolean isRepetition(Repetition rep) {
@@ -262,7 +257,8 @@ abstract public class Type {
         name.equals(other.name)
         && repetition == other.repetition
         && eqOrBothNull(repetition, other.repetition)
-        && eqOrBothNull(id, other.id);
+        && eqOrBothNull(id, other.id)
+        && eqOrBothNull(originalType, other.originalType);
   };
 
   @Override
@@ -319,7 +315,9 @@ abstract public class Type {
 
   /**
    *
+   * @param path a list of groups to convert
    * @param converter logic to convert the tree
+   * @param <T> the type returned by the converter
    * @return the converted tree
    */
    abstract <T> T convert(List<GroupType> path, TypeConverter<T> converter);

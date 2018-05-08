@@ -67,6 +67,9 @@ public class ThriftSchemaConverter {
    * This method may throw if structOrUnionType is unknown.
    *
    * Use convertWithoutProjection below to convert a StructType to MessageType
+   *
+   * @param struct the thrift type descriptor
+   * @return the struct as a Parquet message type
    */
   public MessageType convert(StructType struct) {
     MessageType messageType = ThriftSchemaConvertVisitor.convert(struct, fieldProjectionFilter, true);
@@ -77,6 +80,9 @@ public class ThriftSchemaConverter {
   /**
    * struct is not required to have known structOrUnionType, which is useful
    * for converting a StructType from an (older) file schema to a MessageType
+   *
+   * @param struct the thrift type descriptor
+   * @return the struct as a Parquet message type
    */
   public static MessageType convertWithoutProjection(StructType struct) {
     return ThriftSchemaConvertVisitor.convert(struct, FieldProjectionFilter.ALL_COLUMNS, false);
@@ -165,6 +171,8 @@ public class ThriftSchemaConverter {
       case STRING:
         StringType stringType = new StringType();
         FieldMetaData fieldMetaData = field.getFieldMetaData();
+        // There is no real binary type (see THRIFT-1920) in Thrift,
+        // binary data is represented by String type with an additional binary flag.
         if (fieldMetaData != null && fieldMetaData.valueMetaData.isBinary()) {
           stringType.setBinary(true);
         }

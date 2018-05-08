@@ -19,11 +19,10 @@
 package org.apache.parquet.column.statistics;
 
 import java.util.Arrays;
-import java.util.Objects;
-
 import org.apache.parquet.column.UnknownColumnTypeException;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.PrimitiveComparator;
+import org.apache.parquet.schema.PrimitiveStringifier;
 import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.PrimitiveType.PrimitiveTypeName;
 import org.apache.parquet.schema.Type;
@@ -32,18 +31,124 @@ import org.apache.parquet.schema.Type;
 /**
  * Statistics class to keep track of statistics in parquet pages and column chunks
  *
- * @author Katya Gonina
+ * @param <T> the Java type described by this Statistics instance
  */
 public abstract class Statistics<T extends Comparable<T>> {
+
+  /**
+   * Builder class to build Statistics objects. Used to read the statistics from the Parquet file.
+   */
+  public static class Builder {
+    private final PrimitiveType type;
+    private byte[] min;
+    private byte[] max;
+    private long numNulls = -1;
+
+    private Builder(PrimitiveType type) {
+      this.type = type;
+    }
+
+    public Builder withMin(byte[] min) {
+      this.min = min;
+      return this;
+    }
+
+    public Builder withMax(byte[] max) {
+      this.max = max;
+      return this;
+    }
+
+    public Builder withNumNulls(long numNulls) {
+      this.numNulls = numNulls;
+      return this;
+    }
+
+    public Statistics<?> build() {
+      Statistics<?> stats = createStats(type);
+      if (min != null && max != null) {
+        stats.setMinMaxFromBytes(min, max);
+      }
+      stats.num_nulls = this.numNulls;
+      return stats;
+    }
+  }
+
+  // Builder for FLOAT type to handle special cases of min/max values like NaN, -0.0, and 0.0
+  private static class FloatBuilder extends Builder {
+    public FloatBuilder(PrimitiveType type) {
+      super(type);
+      assert type.getPrimitiveTypeName() == PrimitiveTypeName.FLOAT;
+    }
+
+    @Override
+    public Statistics<?> build() {
+      FloatStatistics stats = (FloatStatistics) super.build();
+      if (stats.hasNonNullValue()) {
+        Float min = stats.genericGetMin();
+        Float max = stats.genericGetMax();
+        // Drop min/max values in case of NaN as the sorting order of values is undefined for this case
+        if (min.isNaN() || max.isNaN()) {
+          stats.setMinMax(0.0f, 0.0f);
+          ((Statistics<?>) stats).hasNonNullValue = false;
+        } else {
+          // Updating min to -0.0 and max to +0.0 to ensure that no 0.0 values would be skipped
+          if (Float.compare(min, 0.0f) == 0) {
+            min = -0.0f;
+            stats.setMinMax(min, max);
+          }
+          if (Float.compare(max, -0.0f) == 0) {
+            max = 0.0f;
+            stats.setMinMax(min, max);
+          }
+        }
+      }
+      return stats;
+    }
+  }
+
+  // Builder for DOUBLE type to handle special cases of min/max values like NaN, -0.0, and 0.0
+  private static class DoubleBuilder extends Builder {
+    public DoubleBuilder(PrimitiveType type) {
+      super(type);
+      assert type.getPrimitiveTypeName() == PrimitiveTypeName.DOUBLE;
+    }
+
+    @Override
+    public Statistics<?> build() {
+      DoubleStatistics stats = (DoubleStatistics) super.build();
+      if (stats.hasNonNullValue()) {
+        Double min = stats.genericGetMin();
+        Double max = stats.genericGetMax();
+        // Drop min/max values in case of NaN as the sorting order of values is undefined for this case
+        if (min.isNaN() || max.isNaN()) {
+          stats.setMinMax(0.0, 0.0);
+          ((Statistics<?>) stats).hasNonNullValue = false;
+        } else {
+          // Updating min to -0.0 and max to +0.0 to ensure that no 0.0 values would be skipped
+          if (Double.compare(min, 0.0) == 0) {
+            min = -0.0;
+            stats.setMinMax(min, max);
+          }
+          if (Double.compare(max, -0.0) == 0) {
+            max = 0.0;
+            stats.setMinMax(min, max);
+          }
+        }
+      }
+      return stats;
+    }
+  }
 
   private final PrimitiveType type;
   private final PrimitiveComparator<T> comparator;
   private boolean hasNonNullValue;
   private long num_nulls;
+  final PrimitiveStringifier stringifier;
 
   Statistics(PrimitiveType type) {
     this.type = type;
     this.comparator = type.comparator();
+    this.stringifier = type.stringifier();
     hasNonNullValue = false;
     num_nulls = 0;
   }
@@ -105,6 +210,24 @@ public abstract class Statistics<T extends Comparable<T>> {
         return new BinaryStatistics(primitive);
       default:
         throw new UnknownColumnTypeException(primitive.getPrimitiveTypeName());
+    }
+  }
+
+  /**
+   * Returns a builder to create new statistics object. Used to read the statistics from the parquet file.
+   *
+   * @param type
+   *          type of the column
+   * @return builder to create new statistics object
+   */
+  public static Builder getBuilderForReading(PrimitiveType type) {
+    switch (type.getPrimitiveTypeName()) {
+      case FLOAT:
+        return new FloatBuilder(type);
+      case DOUBLE:
+        return new DoubleBuilder(type);
+      default:
+        return new Builder(type);
     }
   }
 
@@ -216,28 +339,36 @@ public abstract class Statistics<T extends Comparable<T>> {
    * Abstract method to set min and max values from byte arrays.
    * @param minBytes byte array to set the min value to
    * @param maxBytes byte array to set the max value to
+   * @deprecated will be removed in 2.0.0. Use {@link #getBuilderForReading(PrimitiveType)} instead.
    */
+  @Deprecated
   abstract public void setMinMaxFromBytes(byte[] minBytes, byte[] maxBytes);
 
   /**
    * Returns the min value in the statistics. The java natural order of the returned type defined by {@link
-   * T#compareTo(Object)} might not be the proper one. For example, UINT_32 requires unsigned comparison instead of the
+   * Comparable#compareTo(Object)} might not be the proper one. For example, UINT_32 requires unsigned comparison instead of the
    * natural signed one. Use {@link #compareMinToValue(Comparable)} or the comparator returned by {@link #comparator()} to
    * always get the proper ordering.
+   *
+   * @return the min value
    */
   abstract public T genericGetMin();
 
   /**
    * Returns the max value in the statistics. The java natural order of the returned type defined by {@link
-   * T#compareTo(Object)} might not be the proper one. For example, UINT_32 requires unsigned comparison instead of the
+   * Comparable#compareTo(Object)} might not be the proper one. For example, UINT_32 requires unsigned comparison instead of the
    * natural signed one. Use {@link #compareMaxToValue(Comparable)} or the comparator returned by {@link #comparator()} to
    * always get the proper ordering.
+   *
+   * @return the max value
    */
   abstract public T genericGetMax();
 
   /**
    * Returns the {@link PrimitiveComparator} implementation to be used to compare two generic values in the proper way
    * (for example, unsigned comparison for UINT_32).
+   *
+   * @return the comparator for data described by this Statistics instance
    */
   public final PrimitiveComparator<T> comparator() {
     return comparator;
@@ -285,21 +416,23 @@ public abstract class Statistics<T extends Comparable<T>> {
 
   /**
    * Returns the string representation of min for debugging/logging purposes.
+   *
+   * @return the min value as a string
    */
   public String minAsString() {
-    return toString(genericGetMin());
+    return stringify(genericGetMin());
   }
 
   /**
    * Returns the string representation of max for debugging/logging purposes.
+   *
+   * @return the max value as a string
    */
   public String maxAsString() {
-    return toString(genericGetMax());
+    return stringify(genericGetMax());
   }
 
-  String toString(T value) {
-    return Objects.toString(value);
-  }
+  abstract String stringify(T value);
 
   /**
    * Abstract method to return whether the min and max values fit in the given
@@ -311,9 +444,13 @@ public abstract class Statistics<T extends Comparable<T>> {
 
   @Override
   public String toString() {
-    if (this.hasNonNullValue())
-      return String.format("min: %s, max: %s, num_nulls: %d", minAsString(), maxAsString(), this.getNumNulls());
-    else if (!this.isEmpty())
+    if (this.hasNonNullValue()) {
+      if (isNumNullsSet()) {
+        return String.format("min: %s, max: %s, num_nulls: %d", minAsString(), maxAsString(), this.getNumNulls());
+      } else {
+        return String.format("min: %s, max: %s, num_nulls not defined", minAsString(), maxAsString());
+      }
+    } else if (!this.isEmpty())
       return String.format("num_nulls: %d, min/max not defined", this.getNumNulls());
     else
       return "no stats for this column";
@@ -336,7 +473,7 @@ public abstract class Statistics<T extends Comparable<T>> {
 
   /**
    * Returns the null count
-   * @return null count
+   * @return null count or {@code -1} if the null count is not set
    */
   public long getNumNulls() {
     return num_nulls;
@@ -344,8 +481,12 @@ public abstract class Statistics<T extends Comparable<T>> {
 
   /**
    * Sets the number of nulls to the parameter value
-   * @param nulls null count to set the count to
+   *
+   * @param nulls
+   *          null count to set the count to
+   * @deprecated will be removed in 2.0.0. Use {@link #getBuilderForReading(PrimitiveType)} instead.
    */
+  @Deprecated
   public void setNumNulls(long nulls) {
     num_nulls = nulls;
   }
@@ -356,14 +497,23 @@ public abstract class Statistics<T extends Comparable<T>> {
    * @return true if object is empty, false otherwise
    */
   public boolean isEmpty() {
-    return !hasNonNullValue && num_nulls == 0;
+    return !hasNonNullValue && !isNumNullsSet();
   }
 
   /**
    * Returns whether there have been non-null values added to this statistics
+   *
+   * @return true if the values contained at least one non-null value
    */
   public boolean hasNonNullValue() {
     return hasNonNullValue;
+  }
+
+  /**
+   * @return whether numNulls is set and can be used
+   */
+  public boolean isNumNullsSet() {
+    return num_nulls >= 0;
   }
 
   /**

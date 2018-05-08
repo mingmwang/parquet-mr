@@ -9,7 +9,7 @@
 
   <groupId>org.apache.parquet</groupId>
   <artifactId>parquet</artifactId>
-  <version>1.9.1-SNAPSHOT</version>
+  <version>1.10.1-SNAPSHOT</version>
   <packaging>pom</packaging>
 
   <name>Apache Parquet MR</name>
@@ -19,7 +19,7 @@
   <scm>
     <connection>scm:git:git@github.com:apache/parquet-mr.git</connection>
     <url>scm:git:git@github.com:apache/parquet-mr.git</url>
-    <developerConnection>scm:git:https://git-wip-us.apache.org/repos/asf/parquet-mr.git</developerConnection>
+    <developerConnection>scm:git:https://github.com/apache/parquet-mr.git</developerConnection>
     <tag>HEAD</tag>
   </scm>
 
@@ -67,8 +67,8 @@
   </developers>
 
   <properties>
-    <targetJavaVersion>1.7</targetJavaVersion>
-    <maven.compiler.source>1.7</maven.compiler.source>
+    <targetJavaVersion>1.8</targetJavaVersion>
+    <maven.compiler.source>1.8</maven.compiler.source>
     <maven.compiler.target>${targetJavaVersion}</maven.compiler.target>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <github.global.server>github</github.global.server>
@@ -90,8 +90,8 @@
     <scala.maven.test.skip>false</scala.maven.test.skip>
     <pig.version>0.16.0</pig.version>
     <pig.classifier>h2</pig.classifier>
-    <thrift.version>0.7.0</thrift.version>
     <thrift-maven-plugin.version>0.10.0</thrift-maven-plugin.version>
+    <thrift.version>0.9.3</thrift.version>
     <fastutil.version>7.0.13</fastutil.version>
     <semver.api.version>0.9.33</semver.api.version>
     <slf4j.version>1.7.22</slf4j.version>
@@ -450,6 +450,7 @@
       <plugin>
         <groupId>org.apache.rat</groupId>
         <artifactId>apache-rat-plugin</artifactId>
+        <version>0.12</version>
         <executions>
           <execution>
             <phase>test</phase>
@@ -459,6 +460,7 @@
           </execution>
         </executions>
         <configuration>
+          <consoleOutput>true</consoleOutput>
           <excludes>
             <exclude>**/*.parquet</exclude>
             <exclude>**/*.avro</exclude>

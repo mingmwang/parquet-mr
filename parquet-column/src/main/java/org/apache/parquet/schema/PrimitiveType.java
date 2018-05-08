@@ -33,11 +33,7 @@ import org.apache.parquet.schema.ColumnOrder.ColumnOrderName;
 
 
 /**
- *
  * Representation of a Primitive type
- *
- * @author Julien Le Dem
- *
  */
 public final class PrimitiveType extends Type {
 
@@ -63,8 +59,6 @@ public final class PrimitiveType extends Type {
 
   /**
    * Supported Primitive types
-   *
-   * @author Julien Le Dem
    */
   public static enum PrimitiveTypeName {
     INT64("getLong", Long.TYPE) {
@@ -358,7 +352,7 @@ public final class PrimitiveType extends Type {
 
     /**
      * reads the value from the columnReader with the appropriate accessor and returns a String representation
-     * @param columnReader
+     * @param columnReader where to read
      * @return a string
      */
     abstract public String toString(ColumnReader columnReader);
@@ -377,7 +371,6 @@ public final class PrimitiveType extends Type {
     abstract public <T, E extends Exception> T convert(PrimitiveTypeNameConverter<T, E> converter) throws E;
 
     abstract PrimitiveComparator<?> comparator(OriginalType logicalType);
-
   }
 
   private final PrimitiveTypeName primitive;
@@ -720,6 +713,9 @@ public final class PrimitiveType extends Type {
    * Returns the {@link Type} specific comparator for properly comparing values. The natural ordering of the values
    * might not proper in certain cases (e.g. {@code UINT_32} requires unsigned comparison of {@code int} values while
    * the natural ordering is signed.)
+   *
+   * @param <T> the type of values compared by the returned PrimitiveComparator
+   * @return a PrimitiveComparator for values of this type
    */
   @SuppressWarnings("unchecked")
   public <T> PrimitiveComparator<T> comparator() {
@@ -731,5 +727,14 @@ public final class PrimitiveType extends Type {
    */
   public ColumnOrder columnOrder() {
     return columnOrder;
+  }
+
+  /**
+   * @return the {@link Type} specific stringifier for generating the proper string representation of the values.
+   */
+  @SuppressWarnings("unchecked")
+  public PrimitiveStringifier stringifier() {
+    OriginalType originalType = getOriginalType();
+    return originalType == null ? PrimitiveStringifier.DEFAULT_STRINGIFIER : originalType.stringifier(this);
   }
 }
